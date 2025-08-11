@@ -480,7 +480,7 @@
             loadState();
             renderBadges();
 
-            if (window.location.protocol !== 'https-:') {
+            if (window.location.protocol !== 'https:') { // Corrected line
                 showError('<h3>🔒 Secure Connection Required</h3><p>To use your camera, this page must be loaded over a secure (HTTPS) connection.</p>');
                 if (cameraBtn) cameraBtn.disabled = true;
             } else {
