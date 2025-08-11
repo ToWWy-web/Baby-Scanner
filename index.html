@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BabyGuard Live Scanner</title>
+    <title>Nursery Scout</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -12,8 +17,8 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #000;
+            font-family: 'Nunito', sans-serif;
+            background: #1a1a2e; /* Soft navy background */
             overflow: hidden;
             position: fixed;
             width: 100%;
@@ -33,23 +38,48 @@
             top: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            background: linear-gradient(to bottom, rgba(26, 26, 46, 0.8), transparent);
             color: white;
             padding: 20px 20px 40px 20px;
             text-align: center;
             z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            text-align: left;
         }
 
         .header h1 {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 5px;
+            font-size: 22px;
+            font-weight: 800;
+            margin-bottom: 2px;
         }
 
         .header p {
             opacity: 0.9;
-            font-size: 12px;
+            font-size: 13px;
         }
+
+        .safety-score-container {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+            text-align: center;
+        }
+        .safety-score-label {
+            font-size: 12px;
+            font-weight: 600;
+            opacity: 0.8;
+        }
+        .safety-score {
+            font-size: 24px;
+            font-weight: 800;
+            color: #a0e7e5; /* Light teal for score */
+        }
+
 
         .camera-container {
             position: relative;
@@ -63,7 +93,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* Removed mirrored transform */
         }
 
         .camera-overlay {
@@ -77,24 +106,17 @@
         }
 
         .hazard-polygon {
-            stroke: #ff3b30;
             stroke-width: 4px;
             stroke-linejoin: round;
-            fill: rgba(255, 59, 48, 0.25);
+            fill-opacity: 0.25;
             pointer-events: auto;
             cursor: pointer;
             animation: hazardPulse 2s ease-in-out infinite;
         }
         
         @keyframes hazardPulse {
-            0%, 100% { 
-                stroke: #ff3b30;
-                filter: drop-shadow(0 0 2px #ff3b30);
-            }
-            50% { 
-                stroke: #ff6b6b;
-                filter: drop-shadow(0 0 8px #ff6b6b);
-            }
+            0%, 100% { filter: drop-shadow(0 0 3px currentColor); }
+            50% { filter: drop-shadow(0 0 10px currentColor); }
         }
 
         .controls {
@@ -102,8 +124,8 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
-            padding: 40px 20px 30px 20px;
+            background: linear-gradient(to top, rgba(26, 26, 46, 0.9), transparent);
+            padding: 30px 20px;
             z-index: 100;
             display: flex;
             justify-content: center;
@@ -113,57 +135,62 @@
         }
 
         .control-btn {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50px;
-            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            padding: 14px 22px;
             color: white;
             font-size: 14px;
-            font-weight: 600;
+            font-weight: 700;
+            font-family: 'Nunito', sans-serif;
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 90px;
+            min-width: 80px;
             text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
         .control-btn:hover, .control-btn:active {
-            background: rgba(255,255,255,0.3);
-            border-color: rgba(255,255,255,0.5);
-            transform: scale(0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
         }
         
         .control-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
             background: rgba(100,100,100,0.2);
-            border-color: rgba(100,100,100,0.3);
+            transform: none;
+            box-shadow: none;
         }
 
         .control-btn.active {
-            background: #4facfe;
-            border-color: #4facfe;
-            box-shadow: 0 0 20px rgba(79, 172, 254, 0.4);
+            background: #82aaff; /* Baby blue */
+            box-shadow: 0 0 20px rgba(130, 170, 255, 0.5);
         }
 
         .control-btn.danger {
-            background: #ff3b30;
-            border-color: #ff3b30;
+            background: #ff7e67; /* Coral red */
+        }
+        
+        .control-btn.secondary {
+            background: rgba(130, 170, 255, 0.2);
         }
 
-        .status-indicator {
+        .status-indicator, .toast-notification {
             position: absolute;
             top: 100px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.7);
             color: white;
-            padding: 8px 16px;
+            padding: 10px 20px;
             border-radius: 20px;
-            font-size: 12px;
-            z-index: 60;
+            font-size: 13px;
+            z-index: 800;
             display: none;
             transition: opacity 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
         .camera-error {
@@ -173,7 +200,7 @@
             transform: translate(-50%, -50%);
             color: white;
             text-align: center;
-            background: rgba(0,0,0,0.8);
+            background: rgba(40, 40, 60, 0.9);
             padding: 30px;
             border-radius: 20px;
             z-index: 200;
@@ -183,19 +210,20 @@
 
         .hazard-list-container {
             position: absolute;
-            bottom: 120px; /* Above controls */
+            bottom: 130px;
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 40px);
             max-width: 500px;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(5px);
+            background: rgba(26, 26, 46, 0.7);
+            backdrop-filter: blur(8px);
             border-radius: 15px;
             padding: 10px;
             z-index: 99;
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.1);
         }
         
         .hazard-list-container.visible {
@@ -213,22 +241,25 @@
         }
         
         .hazard-list li {
-            padding: 5px 10px;
+            padding: 8px 12px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         .hazard-list li:last-child {
             border-bottom: none;
         }
 
-        .modal-backdrop {
+        .modal-backdrop, .fullscreen-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.6);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
+            background: rgba(26, 26, 46, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             z-index: 500;
             display: none;
             justify-content: center;
@@ -237,48 +268,101 @@
         }
 
         .modal-content {
-            background: rgba(40, 40, 40, 0.85);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: #2e2e48;
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 20px;
-            padding: 20px;
+            padding: 25px;
             width: 100%;
             max-width: 350px;
             text-align: center;
             color: white;
             animation: modalFadeIn 0.3s ease-out;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
+        
+        /* --- Checklist & Badges Screen --- */
+        .fullscreen-overlay {
+            flex-direction: column;
+            justify-content: flex-start;
+            padding: 20px;
+            padding-top: 60px;
+            overflow-y: auto;
+        }
+        .overlay-header {
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .overlay-header h2 { font-size: 24px; font-weight: 800; }
+        .close-btn { font-size: 24px; background: none; border: none; color: white; cursor: pointer; }
+        
+        .checklist-progress-bar { width: 100%; max-width: 600px; height: 10px; background: rgba(0,0,0,0.2); border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+        #checklistProgress { width: 0%; height: 100%; background: #a0e7e5; border-radius: 5px; transition: width 0.5s ease; }
+        
+        .checklist { width: 100%; max-width: 600px; list-style: none; }
+        .checklist-category { font-size: 18px; font-weight: 700; margin-top: 20px; margin-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px; }
+        .checklist li { background: rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 10px; padding: 15px; display: flex; align-items: center; cursor: pointer; }
+        .checklist input[type="checkbox"] { display: none; }
+        .checklist label { flex-grow: 1; position: relative; padding-left: 35px; }
+        .checklist label::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border: 2px solid #a0e7e5; border-radius: 50%; }
+        .checklist input:checked + label::after { content: '✔'; position: absolute; left: 5px; top: 50%; transform: translateY(-50%); color: #a0e7e5; font-size: 14px; }
+        .checklist input:checked + label { text-decoration: line-through; opacity: 0.6; }
 
-        @keyframes modalFadeIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
+        .badges-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 20px; width: 100%; max-width: 600px; }
+        .badge { background: rgba(255,255,255,0.05); border-radius: 15px; padding: 20px; text-align: center; opacity: 0.4; transition: opacity 0.3s ease; }
+        .badge.unlocked { opacity: 1; }
+        .badge-icon { font-size: 40px; }
+        .badge-title { font-weight: 700; margin-top: 10px; }
+        
+        /* --- Other Modals --- */
+        .room-secured-badge {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(46, 46, 72, 0.8); backdrop-filter: blur(10px); z-index: 600; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; text-align: center; cursor: pointer; opacity: 0; visibility: hidden; transition: opacity 0.5s ease, visibility 0.5s ease;
         }
+        .room-secured-badge.visible { opacity: 1; visibility: visible; }
+        .badge-icon { font-size: 80px; margin-bottom: 20px; animation: badgePop 0.5s ease-out forwards; }
+        .badge-text { font-size: 28px; font-weight: 700; margin-bottom: 10px; animation: badgeFadeInUp 0.5s 0.2s ease-out forwards; opacity: 0; }
+        .badge-subtext { font-size: 16px; opacity: 0; animation: badgeFadeInUp 0.5s 0.4s ease-out forwards; }
+
+        @keyframes badgePop { 0% { transform: scale(0.5); opacity: 0; } 80% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes badgeFadeInUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes modalFadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 
         .modal-header h3 { font-size: 18px; font-weight: 700; margin-bottom: 15px; }
-        .modal-body p { font-size: 14px; line-height: 1.5; opacity: 0.9; margin-bottom: 20px; }
-        .modal-footer { display: flex; justify-content: space-between; gap: 10px; }
-        .modal-btn { flex-grow: 1; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 12px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
-        .modal-btn:hover { background: rgba(255,255,255,0.3); }
-        .modal-btn.danger { background: #ff3b30; border-color: #ff3b30; }
+        .modal-body p { font-size: 15px; line-height: 1.6; opacity: 0.9; margin-bottom: 25px; }
+        .modal-footer { display: flex; flex-direction: column; gap: 10px; }
+        .modal-btn { width: 100%; background: rgba(255,255,255,0.1); border: none; border-radius: 15px; padding: 14px; color: white; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; font-family: 'Nunito', sans-serif; }
+        .modal-btn:hover { background: rgba(255,255,255,0.2); }
+        .modal-btn.danger { background: #ff7e67; }
+        .modal-btn.learn-more { background: #82aaff; }
 
         @media (max-width: 480px) {
-            .header h1 { font-size: 18px; }
-            .header p { font-size: 11px; }
-            .control-btn { padding: 10px 18px; font-size: 13px; min-width: 80px; }
+            .header { flex-direction: column; gap: 10px; padding-bottom: 20px;}
+            .header h1 { font-size: 20px; }
+            .header p { font-size: 12px; }
+            .control-btn { padding: 12px 20px; font-size: 14px; }
         }
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-container" id="appContainer">
         <div class="header">
-            <h1>🛡️ BabyGuard Live Scanner</h1>
-            <p>Real-time AI hazard detection</p>
+            <div class="header-title">
+                <h1>🧸 Nursery Scout</h1>
+                <p>Real-time AI hazard detection</p>
+            </div>
+            <div class="safety-score-container">
+                <div class="safety-score-label">Safety Score</div>
+                <div class="safety-score" id="safetyScore">100</div>
+            </div>
         </div>
 
-        <div class="camera-container">
+        <div class="camera-container" id="captureArea">
             <video id="video" autoplay muted playsinline></video>
             <canvas id="canvas" style="display: none;"></canvas>
             <svg class="camera-overlay" id="overlay"></svg>
-            
             <div class="camera-error" id="cameraError" style="display: none;"></div>
         </div>
 
@@ -293,44 +377,74 @@
             <button class="control-btn" id="flashBtn" onclick="toggleFlash()" style="display: none;">Flash</button>
             <button class="control-btn" id="scanBtn" onclick="toggleScanning()" style="display: none;">Start Scan</button>
             <button class="control-btn danger" onclick="clearAll()">Clear</button>
+            <button class="control-btn secondary" id="saveReportBtn" onclick="saveReport()" style="display: none;">Save Report</button>
+            <button class="control-btn secondary" id="checklistBtn" onclick="toggleChecklist(true)">Checklist</button>
+            <button class="control-btn secondary" id="badgesBtn" onclick="toggleBadges(true)" style="display: none;">Badges</button>
         </div>
     </div>
 
+    <!-- Modals and Overlays -->
     <div class="modal-backdrop" id="hazardModalBackdrop" style="display:none;">
         <div class="modal-content">
             <div class="modal-header"><h3 id="modalHazardName"></h3></div>
             <div class="modal-body"><p id="modalHazardTip"></p></div>
             <div class="modal-footer">
+                <button class="modal-btn learn-more" id="modalLearnMoreBtn">Learn More</button>
                 <button class="modal-btn" id="modalKeepBtn">Keep</button>
                 <button class="modal-btn danger" id="modalDismissBtn">Dismiss</button>
             </div>
         </div>
     </div>
+    
+    <div class="room-secured-badge" id="roomSecuredBadge">
+        <div class="badge-icon">✅</div>
+        <div class="badge-text">Room Secured!</div>
+        <p class="badge-subtext">Great job! Tap to continue.</p>
+    </div>
+
+    <div class="fullscreen-overlay" id="checklistScreen" style="display:none;">
+        <div class="overlay-header">
+            <h2>Baby Proofing Checklist</h2>
+            <button class="close-btn" onclick="toggleChecklist(false)">✖</button>
+        </div>
+        <div class="checklist-progress-bar"><div id="checklistProgress"></div></div>
+        <ul class="checklist" id="checklist"></ul>
+    </div>
+
+    <div class="fullscreen-overlay" id="badgesScreen" style="display:none;">
+        <div class="overlay-header">
+            <h2>My Badges</h2>
+            <button class="close-btn" onclick="toggleBadges(false)">✖</button>
+        </div>
+        <div class="badges-grid" id="badgesGrid"></div>
+    </div>
+    
+    <div class="toast-notification" id="toastNotification"></div>
+
 
     <script>
         // --- DOM Elements ---
-        let video, canvas, ctx, overlay;
-        let scanBtn, cameraBtn, flashBtn, statusIndicator, cameraErrorElement;
-        let hazardListContainer, hazardList;
+        let video, canvas, ctx, overlay, appContainer;
+        let scanBtn, cameraBtn, flashBtn, statusIndicator, cameraErrorElement, saveReportBtn, checklistBtn, badgesBtn;
+        let hazardListContainer, hazardList, roomSecuredBadge, safetyScoreElement;
+        let checklistScreen, checklistElement, checklistProgress;
+        let badgesScreen, badgesGrid, toastNotification;
 
         // --- State Variables ---
-        let isScanning = false;
-        let isAnalyzing = false;
-        let scanLoopTimeout = null;
-        let detectedHazards = [];
-        let hazardIdCounter = 0;
-        let videoTrack = null;
-        let isFlashOn = false;
+        let isScanning = false, isAnalyzing = false, scanLoopTimeout = null;
+        let detectedHazards = [], hazardIdCounter = 0;
+        let videoTrack = null, isFlashOn = false;
+        let checklistState = {}, unlockedBadges = {};
         
         // --- Constants ---
-        const API_SCAN_INTERVAL = 4000; // Increased interval for more complex task
+        const API_SCAN_INTERVAL = 4000;
         const HAZARD_TYPES = {
-            'outlet': { name: 'Electrical Outlet' },
-            'sharp': { name: 'Sharp Corner' },
-            'small': { name: 'Choking Hazard' },
-            'chemical': { name: 'Chemical/Cleaner' },
-            'cord': { name: 'Loose Cord' },
-            'unstable': { name: 'Unstable Object' }
+            'outlet':   { name: 'Electrical Outlet', color: '#ff7e67', points: 15 },
+            'sharp':    { name: 'Sharp Corner',      color: '#f9d423', points: 10 },
+            'small':    { name: 'Choking Hazard',    color: '#ff7e67', points: 15 },
+            'chemical': { name: 'Chemical/Cleaner',  color: '#ff7e67', points: 20 },
+            'cord':     { name: 'Loose Cord',        color: '#f9d423', points: 10 },
+            'unstable': { name: 'Unstable Object',   color: '#82aaff', points: 5  }
         };
 
         // --- Initialization ---
@@ -347,13 +461,30 @@
             cameraErrorElement = document.getElementById('cameraError');
             hazardListContainer = document.getElementById('hazardListContainer');
             hazardList = document.getElementById('hazardList');
+            roomSecuredBadge = document.getElementById('roomSecuredBadge');
+            safetyScoreElement = document.getElementById('safetyScore');
+            appContainer = document.getElementById('appContainer');
+            saveReportBtn = document.getElementById('saveReportBtn');
+            checklistBtn = document.getElementById('checklistBtn');
+            badgesBtn = document.getElementById('badgesBtn');
+            checklistScreen = document.getElementById('checklistScreen');
+            checklistElement = document.getElementById('checklist');
+            checklistProgress = document.getElementById('checklistProgress');
+            badgesScreen = document.getElementById('badgesScreen');
+            badgesGrid = document.getElementById('badgesGrid');
+            toastNotification = document.getElementById('toastNotification');
             
+            roomSecuredBadge.addEventListener('click', () => roomSecuredBadge.classList.remove('visible'));
+            
+            renderChecklist();
+            loadState();
+            renderBadges();
+
             if (window.location.protocol !== 'https-:') {
                 showError('<h3>🔒 Secure Connection Required</h3><p>To use your camera, this page must be loaded over a secure (HTTPS) connection.</p>');
-                if (cameraBtn) {
-                    cameraBtn.disabled = true;
-                }
+                if (cameraBtn) cameraBtn.disabled = true;
             } else {
+                appContainer.style.visibility = 'visible';
                 showStatus('👆 Tap "Start Camera" to begin');
             }
         });
@@ -369,7 +500,6 @@
                 
                 await video.play();
                 
-                // Wait for the video to have dimensions to set the canvas size correctly
                 await new Promise(resolve => {
                     video.onloadedmetadata = () => {
                         canvas.width = video.videoWidth;
@@ -400,6 +530,7 @@
             if (isScanning) {
                 scanBtn.textContent = 'Stop Scan';
                 scanBtn.classList.add('active');
+                saveReportBtn.style.display = 'none';
                 showStatus('🔍 Starting AI scan...');
                 clearAll();
                 scanLoop();
@@ -408,6 +539,11 @@
                 scanBtn.classList.remove('active');
                 if (scanLoopTimeout) clearTimeout(scanLoopTimeout);
                 showStatus('Scan paused.');
+                saveReportBtn.style.display = 'inline-block';
+                
+                if (detectedHazards.length === 0) {
+                    showRoomSecured();
+                }
             }
         }
 
@@ -429,6 +565,10 @@
                     showStatus('✅ All clear! Scanning...');
                 }
                 updateHazardList();
+                calculateSafetyScore();
+                
+                unlockBadge('firstScan');
+                badgesBtn.style.display = 'inline-block';
 
             } catch (error) {
                 console.error("AI Analysis Error:", error);
@@ -443,7 +583,6 @@
         }
         
         async function analyzeFrameWithAI() {
-            // Ensure canvas dimensions match current video dimensions
             if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -453,7 +592,7 @@
             const apiKey = ""; 
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
-            const prompt = `Analyze this image for baby safety hazards. For each hazard found, provide its type and a precise polygon outlining it. The polygon should be an array of normalized {x, y} coordinates. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
+            const prompt = `Analyze this image for baby safety hazards. For each hazard, provide its type, a severity level ('high', 'medium', 'low'), and a precise polygon outline. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
 
             const payload = {
                 contents: [{ parts: [
@@ -468,6 +607,7 @@
                             type: "OBJECT",
                             properties: {
                                 "type": { "type": "STRING", "enum": Object.keys(HAZARD_TYPES) },
+                                "severity": { "type": "STRING", "enum": ["high", "medium", "low"] },
                                 "polygon": {
                                     "type": "ARRAY",
                                     "items": {
@@ -477,7 +617,7 @@
                                     }
                                 }
                             },
-                            "required": ["type", "polygon"]
+                            "required": ["type", "severity", "polygon"]
                         }
                     }
                 }
@@ -501,11 +641,15 @@
         // --- UI and Hazard Management ---
         function addHazard(hazardData) {
             const hazardId = ++hazardIdCounter;
+            const hazardInfo = HAZARD_TYPES[hazardData.type] || { name: 'Unknown', color: '#ffffff', points: 5 };
             const newHazard = {
                 id: hazardId,
                 type: hazardData.type,
-                name: HAZARD_TYPES[hazardData.type]?.name || 'Unknown',
-                polygon: hazardData.polygon
+                name: hazardInfo.name,
+                polygon: hazardData.polygon,
+                severity: hazardData.severity,
+                color: hazardInfo.color,
+                points: hazardInfo.points
             };
             detectedHazards.push(newHazard);
             addHazardOverlay(newHazard);
@@ -516,7 +660,11 @@
             polygon.id = `hazard-${hazard.id}`;
             polygon.classList.add('hazard-polygon');
             
-            // Use the video element's client dimensions for scaling, as videoWidth can be 0 initially
+            const color = HAZARD_TYPES[hazard.type]?.color || '#ffffff';
+            polygon.style.stroke = color;
+            polygon.style.fill = color;
+            polygon.style.color = color;
+            
             const videoWidth = video.clientWidth;
             const videoHeight = video.clientHeight;
 
@@ -534,7 +682,8 @@
             if (detectedHazards.length > 0) {
                 detectedHazards.forEach(h => {
                     const li = document.createElement('li');
-                    li.textContent = `⚠️ ${h.name}`;
+                    li.textContent = `🧸 ${h.name}`;
+                    li.style.borderLeft = `4px solid ${HAZARD_TYPES[h.type]?.color || '#fff'}`;
                     hazardList.appendChild(li);
                 });
                 hazardListContainer.classList.add('visible');
@@ -542,12 +691,28 @@
                 hazardListContainer.classList.remove('visible');
             }
         }
+        
+        function calculateSafetyScore() {
+            let score = 100;
+            detectedHazards.forEach(h => {
+                score -= h.points;
+            });
+            safetyScoreElement.textContent = Math.max(0, score);
+        }
 
         function removeHazard(hazardId) {
             const hazardElement = document.getElementById(`hazard-${hazardId}`);
             if (hazardElement) hazardElement.remove();
             detectedHazards = detectedHazards.filter(h => h.id !== hazardId);
             updateHazardList();
+            calculateSafetyScore();
+            if (Object.keys(unlockedBadges).length > 0 && !unlockedBadges['clear10']) {
+                const clearedCount = parseInt(localStorage.getItem('nurseryScoutClearedCount') || '0') + 1;
+                localStorage.setItem('nurseryScoutClearedCount', clearedCount);
+                if (clearedCount >= 10) {
+                    unlockBadge('clear10');
+                }
+            }
         }
 
         function clearOverlays() {
@@ -559,6 +724,7 @@
             detectedHazards = [];
             hazardIdCounter = 0;
             updateHazardList();
+            calculateSafetyScore();
         }
         
         async function toggleFlash() {
@@ -572,6 +738,39 @@
                 console.error('Flash control error:', e);
                 showError('<h3>🔦 Flash Error</h3><p>Could not control the flash.</p>');
             }
+        }
+        
+        function showRoomSecured() {
+            if (typeof Tone !== 'undefined') {
+                const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                const now = Tone.now();
+                synth.triggerAttackRelease(["C4", "E4", "G4", "C5"], "8n", now);
+                synth.triggerAttackRelease(["E4", "G4", "C5"], "8n", now + 0.2);
+            }
+            roomSecuredBadge.classList.add('visible');
+        }
+        
+        // --- Report, Checklist, Badges ---
+        async function saveReport() {
+            showStatus('🖼️ Creating report...', 2000);
+            try {
+                const canvas = await html2canvas(document.getElementById('captureArea'), { useCORS: true });
+                const link = document.createElement('a');
+                link.download = 'NurseryScout_Report.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } catch (e) {
+                console.error('Failed to create report:', e);
+                showError('<h3>❌ Report Failed</h3><p>Could not generate the report image.</p>');
+            }
+        }
+
+        function toggleChecklist(show) {
+            checklistScreen.style.display = show ? 'flex' : 'none';
+        }
+
+        function toggleBadges(show) {
+            badgesScreen.style.display = show ? 'flex' : 'none';
         }
 
         // --- Utility Functions ---
@@ -599,9 +798,19 @@
             }, duration);
         }
 
+        function showToast(message) {
+            toastNotification.textContent = message;
+            toastNotification.style.display = 'block';
+            toastNotification.style.opacity = '1';
+            setTimeout(() => {
+                toastNotification.style.opacity = '0';
+                setTimeout(() => toastNotification.style.display = 'none', 300);
+            }, 4000);
+        }
+
         function showHazardAlert(hazard) {
             const modal = document.getElementById('hazardModalBackdrop');
-            document.getElementById('modalHazardName').textContent = `⚠️ ${hazard.name}`;
+            document.getElementById('modalHazardName').textContent = `🧸 ${hazard.name}`;
             const tips = {
                 outlet: 'Install safety plugs or sliding outlet covers immediately.',
                 sharp: 'Add corner guards or edge bumpers to prevent head injuries.',
@@ -612,6 +821,11 @@
             };
             document.getElementById('modalHazardTip').textContent = `Safety Tip: ${tips[hazard.type] || 'Secure this item.'}`;
             
+            document.getElementById('modalLearnMoreBtn').onclick = () => {
+                const query = encodeURIComponent(`how to baby proof ${hazard.name}`);
+                window.open(`https://www.google.com/search?q=${query}`, '_blank');
+            };
+
             document.getElementById('modalDismissBtn').onclick = () => {
                 removeHazard(hazard.id);
                 modal.style.display = 'none';
@@ -622,6 +836,121 @@
             
             modal.style.display = 'flex';
         }
+        
+        // --- Checklist Logic ---
+        const checklistItems = [
+            { category: 'General Safety', items: [
+                { id: 'smokeAlarms', text: 'Test smoke and CO alarms' },
+                { id: 'firstAid', text: 'Have a well-stocked first-aid kit' },
+                { id: 'emergencyNumbers', text: 'Post emergency numbers' },
+                { id: 'windows', text: 'Install window guards and stops' },
+            ]},
+            { category: 'Furniture & Fixtures', items: [
+                { id: 'anchorFurniture', text: 'Anchor heavy furniture to walls' },
+                { id: 'coverCorners', text: 'Cover sharp corners and edges' },
+                { id: 'secureCords', text: 'Secure blind and curtain cords' },
+            ]},
+            { category: 'Electrical & Appliances', items: [
+                { id: 'coverOutlets', text: 'Cover all unused electrical outlets' },
+                { id: 'hideCords', text: 'Hide electrical cords behind furniture' },
+                { id: 'waterHeater', text: 'Set water heater to 120°F (49°C)' },
+            ]},
+        ];
+
+        function renderChecklist() {
+            checklistElement.innerHTML = '';
+            checklistItems.forEach(category => {
+                const categoryTitle = document.createElement('h3');
+                categoryTitle.className = 'checklist-category';
+                categoryTitle.textContent = category.category;
+                checklistElement.appendChild(categoryTitle);
+                category.items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.dataset.id = item.id;
+                    const input = document.createElement('input');
+                    input.type = 'checkbox';
+                    input.id = item.id;
+                    const label = document.createElement('label');
+                    label.htmlFor = item.id;
+                    label.textContent = item.text;
+                    li.appendChild(input);
+                    li.appendChild(label);
+                    checklistElement.appendChild(li);
+                });
+            });
+            checklistElement.addEventListener('click', handleChecklistItemClick);
+        }
+        
+        function handleChecklistItemClick(e) {
+            if (e.target.tagName === 'LABEL') {
+                const checkbox = document.getElementById(e.target.htmlFor);
+                checkbox.checked = !checkbox.checked;
+                checklistState[checkbox.id] = checkbox.checked;
+                saveState();
+                updateChecklistProgress();
+            }
+        }
+        
+        function updateChecklistProgress() {
+            const allItems = checklistItems.flatMap(c => c.items);
+            const checkedItems = Object.values(checklistState).filter(Boolean).length;
+            const percentage = (checkedItems / allItems.length) * 100;
+            checklistProgress.style.width = `${percentage}%`;
+            if (percentage === 100) {
+                unlockBadge('checklistComplete');
+            }
+        }
+
+        // --- Badge Logic ---
+        const badges = {
+            firstScan: { icon: 'SCAN', title: 'First Scan', unlocked: false },
+            clear10: { icon: 'TARGET', title: 'Hazard Hunter', unlocked: false },
+            checklistComplete: { icon: 'CHECK', title: 'Planner Pro', unlocked: false },
+        };
+
+        function renderBadges() {
+            badgesGrid.innerHTML = '';
+            for (const id in badges) {
+                const badge = badges[id];
+                const isUnlocked = unlockedBadges[id];
+                const div = document.createElement('div');
+                div.className = `badge ${isUnlocked ? 'unlocked' : ''}`;
+                div.innerHTML = `<div class="badge-icon">${badge.icon}</div><div class="badge-title">${badge.title}</div>`;
+                badgesGrid.appendChild(div);
+            }
+        }
+
+        function unlockBadge(id) {
+            if (!unlockedBadges[id]) {
+                unlockedBadges[id] = true;
+                saveState();
+                renderBadges();
+                showToast(`🏆 Badge Unlocked: ${badges[id].title}!`);
+            }
+        }
+
+        // --- State Management (localStorage) ---
+        function saveState() {
+            localStorage.setItem('nurseryScoutChecklist', JSON.stringify(checklistState));
+            localStorage.setItem('nurseryScoutBadges', JSON.stringify(unlockedBadges));
+        }
+
+        function loadState() {
+            checklistState = JSON.parse(localStorage.getItem('nurseryScoutChecklist') || '{}');
+            unlockedBadges = JSON.parse(localStorage.getItem('nurseryScoutBadges') || '{}');
+            
+            // Apply loaded state
+            for (const id in checklistState) {
+                const checkbox = document.getElementById(id);
+                if (checkbox) checkbox.checked = checklistState[id];
+            }
+            updateChecklistProgress();
+            
+            if (Object.keys(unlockedBadges).length > 0) {
+                badgesBtn.style.display = 'inline-block';
+            }
+        }
+
     </script>
 </body>
 </html>
