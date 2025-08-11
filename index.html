@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BabyGuard Live Scanner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #000;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        .app-container {
+            width: 100%;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+            color: white;
+            padding: 20px 20px 40px 20px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 12px;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: #000;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            /* Removed mirrored transform */
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        .hazard-polygon {
+            stroke: #ff3b30;
+            stroke-width: 4px;
+            stroke-linejoin: round;
+            fill: rgba(255, 59, 48, 0.25);
+            pointer-events: auto;
+            cursor: pointer;
+            animation: hazardPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes hazardPulse {
+            0%, 100% { 
+                stroke: #ff3b30;
+                filter: drop-shadow(0 0 2px #ff3b30);
+            }
+            50% { 
+                stroke: #ff6b6b;
+                filter: drop-shadow(0 0 8px #ff6b6b);
+            }
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            padding: 40px 20px 30px 20px;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50px;
+            padding: 12px 20px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 90px;
+            text-align: center;
+        }
+
+        .control-btn:hover, .control-btn:active {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+            transform: scale(0.95);
+        }
+        
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: rgba(100,100,100,0.2);
+            border-color: rgba(100,100,100,0.3);
+        }
+
+        .control-btn.active {
+            background: #4facfe;
+            border-color: #4facfe;
+            box-shadow: 0 0 20px rgba(79, 172, 254, 0.4);
+        }
+
+        .control-btn.danger {
+            background: #ff3b30;
+            border-color: #ff3b30;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 60;
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .camera-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            padding: 30px;
+            border-radius: 20px;
+            z-index: 200;
+            width: calc(100% - 40px);
+            max-width: 400px;
+        }
+
+        .hazard-list-container {
+            position: absolute;
+            bottom: 120px; /* Above controls */
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 500px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            border-radius: 15px;
+            padding: 10px;
+            z-index: 99;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        
+        .hazard-list-container.visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .hazard-list {
+            list-style: none;
+            color: white;
+            font-size: 14px;
+            max-height: 100px;
+            overflow-y: auto;
+            padding: 0;
+        }
+        
+        .hazard-list li {
+            padding: 5px 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .hazard-list li:last-child {
+            border-bottom: none;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 500;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: rgba(40, 40, 40, 0.85);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 20px;
+            padding: 20px;
+            width: 100%;
+            max-width: 350px;
+            text-align: center;
+            color: white;
+            animation: modalFadeIn 0.3s ease-out;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header h3 { font-size: 18px; font-weight: 700; margin-bottom: 15px; }
+        .modal-body p { font-size: 14px; line-height: 1.5; opacity: 0.9; margin-bottom: 20px; }
+        .modal-footer { display: flex; justify-content: space-between; gap: 10px; }
+        .modal-btn { flex-grow: 1; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 12px; color: white; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s ease; }
+        .modal-btn:hover { background: rgba(255,255,255,0.3); }
+        .modal-btn.danger { background: #ff3b30; border-color: #ff3b30; }
+
+        @media (max-width: 480px) {
+            .header h1 { font-size: 18px; }
+            .header p { font-size: 11px; }
+            .control-btn { padding: 10px 18px; font-size: 13px; min-width: 80px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>🛡️ BabyGuard Live Scanner</h1>
+            <p>Real-time AI hazard detection</p>
+        </div>
+
+        <div class="camera-container">
+            <video id="video" autoplay muted playsinline></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <svg class="camera-overlay" id="overlay"></svg>
+            
+            <div class="camera-error" id="cameraError" style="display: none;"></div>
+        </div>
+
+        <div class="status-indicator" id="statusIndicator">Ready</div>
+        
+        <div class="hazard-list-container" id="hazardListContainer">
+            <ul class="hazard-list" id="hazardList"></ul>
+        </div>
+
+        <div class="controls">
+            <button class="control-btn" id="cameraBtn" onclick="initCamera()">Start Camera</button>
+            <button class="control-btn" id="flashBtn" onclick="toggleFlash()" style="display: none;">Flash</button>
+            <button class="control-btn" id="scanBtn" onclick="toggleScanning()" style="display: none;">Start Scan</button>
+            <button class="control-btn danger" onclick="clearAll()">Clear</button>
+        </div>
+    </div>
+
+    <div class="modal-backdrop" id="hazardModalBackdrop" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modalHazardName"></h3></div>
+            <div class="modal-body"><p id="modalHazardTip"></p></div>
+            <div class="modal-footer">
+                <button class="modal-btn" id="modalKeepBtn">Keep</button>
+                <button class="modal-btn danger" id="modalDismissBtn">Dismiss</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        let video, canvas, ctx, overlay;
+        let scanBtn, cameraBtn, flashBtn, statusIndicator, cameraErrorElement;
+        let hazardListContainer, hazardList;
+
+        // --- State Variables ---
+        let isScanning = false;
+        let isAnalyzing = false;
+        let scanLoopTimeout = null;
+        let detectedHazards = [];
+        let hazardIdCounter = 0;
+        let videoTrack = null;
+        let isFlashOn = false;
+        
+        // --- Constants ---
+        const API_SCAN_INTERVAL = 4000; // Increased interval for more complex task
+        const HAZARD_TYPES = {
+            'outlet': { name: 'Electrical Outlet' },
+            'sharp': { name: 'Sharp Corner' },
+            'small': { name: 'Choking Hazard' },
+            'chemical': { name: 'Chemical/Cleaner' },
+            'cord': { name: 'Loose Cord' },
+            'unstable': { name: 'Unstable Object' }
+        };
+
+        // --- Initialization ---
+        window.addEventListener('load', () => {
+            // Cache DOM elements
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            overlay = document.getElementById('overlay');
+            scanBtn = document.getElementById('scanBtn');
+            cameraBtn = document.getElementById('cameraBtn');
+            flashBtn = document.getElementById('flashBtn');
+            statusIndicator = document.getElementById('statusIndicator');
+            cameraErrorElement = document.getElementById('cameraError');
+            hazardListContainer = document.getElementById('hazardListContainer');
+            hazardList = document.getElementById('hazardList');
+            
+            if (window.location.protocol !== 'https-:') {
+                showError('<h3>🔒 Secure Connection Required</h3><p>To use your camera, this page must be loaded over a secure (HTTPS) connection.</p>');
+                if (cameraBtn) {
+                    cameraBtn.disabled = true;
+                }
+            } else {
+                showStatus('👆 Tap "Start Camera" to begin');
+            }
+        });
+
+        async function initCamera() {
+            try {
+                showStatus('📱 Requesting camera permission...');
+                const constraints = { video: { facingMode: 'environment' }, audio: false };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                video.srcObject = stream;
+                videoTrack = stream.getVideoTracks()[0];
+                
+                await video.play();
+                
+                // Wait for the video to have dimensions to set the canvas size correctly
+                await new Promise(resolve => {
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        resolve();
+                    };
+                });
+                
+                cameraErrorElement.style.display = 'none';
+                cameraBtn.style.display = 'none';
+                scanBtn.style.display = 'inline-block';
+                
+                const capabilities = videoTrack.getCapabilities();
+                if (capabilities.torch) {
+                    flashBtn.style.display = 'inline-block';
+                }
+                
+                showStatus('✅ Camera ready');
+
+            } catch (error) {
+                handleCameraError(error);
+            }
+        }
+
+        // --- Core Scanning & AI Logic ---
+        function toggleScanning() {
+            isScanning = !isScanning;
+            if (isScanning) {
+                scanBtn.textContent = 'Stop Scan';
+                scanBtn.classList.add('active');
+                showStatus('🔍 Starting AI scan...');
+                clearAll();
+                scanLoop();
+            } else {
+                scanBtn.textContent = 'Start Scan';
+                scanBtn.classList.remove('active');
+                if (scanLoopTimeout) clearTimeout(scanLoopTimeout);
+                showStatus('Scan paused.');
+            }
+        }
+
+        async function scanLoop() {
+            if (!isScanning || isAnalyzing) return;
+
+            try {
+                isAnalyzing = true;
+                scanBtn.disabled = true;
+                showStatus('🧠 Analyzing frame...');
+
+                const hazards = await analyzeFrameWithAI();
+
+                clearOverlays();
+                if (hazards && hazards.length > 0) {
+                    hazards.forEach(h => addHazard(h));
+                    showStatus(`⚠️ Found ${hazards.length} hazard(s)!`);
+                } else {
+                    showStatus('✅ All clear! Scanning...');
+                }
+                updateHazardList();
+
+            } catch (error) {
+                console.error("AI Analysis Error:", error);
+                showStatus('❌ AI analysis failed. Retrying...');
+            } finally {
+                isAnalyzing = false;
+                scanBtn.disabled = false;
+                if (isScanning) {
+                    scanLoopTimeout = setTimeout(scanLoop, API_SCAN_INTERVAL);
+                }
+            }
+        }
+        
+        async function analyzeFrameWithAI() {
+            // Ensure canvas dimensions match current video dimensions
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const base64ImageData = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
+            const apiKey = ""; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+            const prompt = `Analyze this image for baby safety hazards. For each hazard found, provide its type and a precise polygon outlining it. The polygon should be an array of normalized {x, y} coordinates. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
+
+            const payload = {
+                contents: [{ parts: [
+                    { text: prompt },
+                    { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
+                ]}],
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                "type": { "type": "STRING", "enum": Object.keys(HAZARD_TYPES) },
+                                "polygon": {
+                                    "type": "ARRAY",
+                                    "items": {
+                                        "type": "OBJECT",
+                                        "properties": { "x": { "type": "NUMBER" }, "y": { "type": "NUMBER" } },
+                                        "required": ["x", "y"]
+                                    }
+                                }
+                            },
+                            "required": ["type", "polygon"]
+                        }
+                    }
+                }
+            };
+
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+            const result = await response.json();
+            
+            if (result.candidates?.[0]?.content?.parts?.[0]) {
+                return JSON.parse(result.candidates[0].content.parts[0].text);
+            }
+            return [];
+        }
+
+        // --- UI and Hazard Management ---
+        function addHazard(hazardData) {
+            const hazardId = ++hazardIdCounter;
+            const newHazard = {
+                id: hazardId,
+                type: hazardData.type,
+                name: HAZARD_TYPES[hazardData.type]?.name || 'Unknown',
+                polygon: hazardData.polygon
+            };
+            detectedHazards.push(newHazard);
+            addHazardOverlay(newHazard);
+        }
+
+        function addHazardOverlay(hazard) {
+            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            polygon.id = `hazard-${hazard.id}`;
+            polygon.classList.add('hazard-polygon');
+            
+            // Use the video element's client dimensions for scaling, as videoWidth can be 0 initially
+            const videoWidth = video.clientWidth;
+            const videoHeight = video.clientHeight;
+
+            const points = hazard.polygon.map(p => 
+                `${p.x * videoWidth},${p.y * videoHeight}`
+            ).join(' ');
+            
+            polygon.setAttribute('points', points);
+            polygon.onclick = () => showHazardAlert(hazard);
+            overlay.appendChild(polygon);
+        }
+        
+        function updateHazardList() {
+            hazardList.innerHTML = '';
+            if (detectedHazards.length > 0) {
+                detectedHazards.forEach(h => {
+                    const li = document.createElement('li');
+                    li.textContent = `⚠️ ${h.name}`;
+                    hazardList.appendChild(li);
+                });
+                hazardListContainer.classList.add('visible');
+            } else {
+                hazardListContainer.classList.remove('visible');
+            }
+        }
+
+        function removeHazard(hazardId) {
+            const hazardElement = document.getElementById(`hazard-${hazardId}`);
+            if (hazardElement) hazardElement.remove();
+            detectedHazards = detectedHazards.filter(h => h.id !== hazardId);
+            updateHazardList();
+        }
+
+        function clearOverlays() {
+            overlay.innerHTML = '';
+        }
+        
+        function clearAll() {
+            clearOverlays();
+            detectedHazards = [];
+            hazardIdCounter = 0;
+            updateHazardList();
+        }
+        
+        async function toggleFlash() {
+            if (!videoTrack || !videoTrack.getCapabilities().torch) return;
+            try {
+                isFlashOn = !isFlashOn;
+                await videoTrack.applyConstraints({ advanced: [{ torch: isFlashOn }] });
+                flashBtn.classList.toggle('active', isFlashOn);
+                showStatus(`Flash ${isFlashOn ? 'On' : 'Off'}`);
+            } catch (e) {
+                console.error('Flash control error:', e);
+                showError('<h3>🔦 Flash Error</h3><p>Could not control the flash.</p>');
+            }
+        }
+
+        // --- Utility Functions ---
+        function handleCameraError(error) {
+            console.error('Camera error:', error);
+            let msg = `<h3>📱 Camera Error</h3><p>${error.message}</p>`;
+            if (error.name === 'NotAllowedError') {
+                msg = '<h3>🚫 Permission Denied</h3><p>Please enable camera access in browser settings.</p>';
+            }
+            showError(`${msg}<button class="control-btn" onclick="initCamera()" style="margin-top:15px;">🔄 Try Again</button>`);
+        }
+
+        function showError(htmlContent) {
+            cameraErrorElement.innerHTML = htmlContent;
+            cameraErrorElement.style.display = 'block';
+        }
+
+        function showStatus(message, duration = 3000) {
+            statusIndicator.textContent = message;
+            statusIndicator.style.display = 'block';
+            statusIndicator.style.opacity = '1';
+            setTimeout(() => {
+                statusIndicator.style.opacity = '0';
+                setTimeout(() => statusIndicator.style.display = 'none', 300);
+            }, duration);
+        }
+
+        function showHazardAlert(hazard) {
+            const modal = document.getElementById('hazardModalBackdrop');
+            document.getElementById('modalHazardName').textContent = `⚠️ ${hazard.name}`;
+            const tips = {
+                outlet: 'Install safety plugs or sliding outlet covers immediately.',
+                sharp: 'Add corner guards or edge bumpers to prevent head injuries.',
+                small: 'Remove small objects. Use the toilet paper tube test for size.',
+                chemical: 'Store all chemicals in locked cabinets, high up and out of reach.',
+                cord: 'Secure cords with covers or keep them completely out of reach.',
+                unstable: 'Anchor tall furniture and TVs to the wall to prevent tip-overs.'
+            };
+            document.getElementById('modalHazardTip').textContent = `Safety Tip: ${tips[hazard.type] || 'Secure this item.'}`;
+            
+            document.getElementById('modalDismissBtn').onclick = () => {
+                removeHazard(hazard.id);
+                modal.style.display = 'none';
+            };
+            document.getElementById('modalKeepBtn').onclick = () => {
+                modal.style.display = 'none';
+            };
+            
+            modal.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
