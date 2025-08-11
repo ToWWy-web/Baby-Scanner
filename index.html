@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -43,13 +42,6 @@
             padding: 20px 20px 40px 20px;
             text-align: center;
             z-index: 100;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .header-title {
-            text-align: left;
         }
 
         .header h1 {
@@ -62,24 +54,6 @@
             opacity: 0.9;
             font-size: 13px;
         }
-
-        .safety-score-container {
-            background: rgba(255,255,255,0.1);
-            padding: 8px 16px;
-            border-radius: 20px;
-            text-align: center;
-        }
-        .safety-score-label {
-            font-size: 12px;
-            font-weight: 600;
-            opacity: 0.8;
-        }
-        .safety-score {
-            font-size: 24px;
-            font-weight: 800;
-            color: #a0e7e5; /* Light teal for score */
-        }
-
 
         .camera-container {
             position: relative;
@@ -105,18 +79,25 @@
             z-index: 50;
         }
 
-        .hazard-polygon {
-            stroke-width: 4px;
-            stroke-linejoin: round;
-            fill-opacity: 0.25;
+        .hazard-box {
+            position: absolute;
+            border: 4px solid #ff7e67;
+            background: rgba(255, 126, 103, 0.25);
+            border-radius: 10px;
             pointer-events: auto;
             cursor: pointer;
             animation: hazardPulse 2s ease-in-out infinite;
         }
         
         @keyframes hazardPulse {
-            0%, 100% { filter: drop-shadow(0 0 3px currentColor); }
-            50% { filter: drop-shadow(0 0 10px currentColor); }
+            0%, 100% { 
+                border-color: #ff7e67;
+                box-shadow: 0 0 3px #ff7e67;
+            }
+            50% { 
+                border-color: #ff9b85;
+                box-shadow: 0 0 10px #ff9b85;
+            }
         }
 
         .controls {
@@ -351,18 +332,13 @@
         <div class="header">
             <div class="header-title">
                 <h1>🧸 Nursery Scout</h1>
-                <p>Real-time AI hazard detection</p>
-            </div>
-            <div class="safety-score-container">
-                <div class="safety-score-label">Safety Score</div>
-                <div class="safety-score" id="safetyScore">100</div>
+                <p>Simulated hazard detection</p>
             </div>
         </div>
 
         <div class="camera-container" id="captureArea">
             <video id="video" autoplay muted playsinline></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-            <svg class="camera-overlay" id="overlay"></svg>
+            <div class="camera-overlay" id="overlay"></div>
             <div class="camera-error" id="cameraError" style="display: none;"></div>
         </div>
 
@@ -377,7 +353,6 @@
             <button class="control-btn" id="flashBtn" onclick="toggleFlash()" style="display: none;">Flash</button>
             <button class="control-btn" id="scanBtn" onclick="toggleScanning()" style="display: none;">Start Scan</button>
             <button class="control-btn danger" onclick="clearAll()">Clear</button>
-            <button class="control-btn secondary" id="saveReportBtn" onclick="saveReport()" style="display: none;">Save Report</button>
             <button class="control-btn secondary" id="checklistBtn" onclick="toggleChecklist(true)">Checklist</button>
             <button class="control-btn secondary" id="badgesBtn" onclick="toggleBadges(true)" style="display: none;">Badges</button>
         </div>
@@ -424,35 +399,32 @@
 
     <script>
         // --- DOM Elements ---
-        let video, canvas, ctx, overlay, appContainer;
-        let scanBtn, cameraBtn, flashBtn, statusIndicator, cameraErrorElement, saveReportBtn, checklistBtn, badgesBtn;
-        let hazardListContainer, hazardList, roomSecuredBadge, safetyScoreElement;
+        let video, overlay, appContainer;
+        let scanBtn, cameraBtn, flashBtn, statusIndicator, cameraErrorElement, checklistBtn, badgesBtn;
+        let hazardListContainer, hazardList, roomSecuredBadge;
         let checklistScreen, checklistElement, checklistProgress;
         let badgesScreen, badgesGrid, toastNotification;
 
         // --- State Variables ---
-        let isScanning = false, isAnalyzing = false, scanLoopTimeout = null;
+        let isScanning = false, scanInterval = null;
         let detectedHazards = [], hazardIdCounter = 0;
         let videoTrack = null, isFlashOn = false;
         let checklistState = {}, unlockedBadges = {};
         
         // --- Constants ---
-        const API_SCAN_INTERVAL = 4000;
         const HAZARD_TYPES = {
-            'outlet':   { name: 'Electrical Outlet', color: '#ff7e67', points: 15 },
-            'sharp':    { name: 'Sharp Corner',      color: '#f9d423', points: 10 },
-            'small':    { name: 'Choking Hazard',    color: '#ff7e67', points: 15 },
-            'chemical': { name: 'Chemical/Cleaner',  color: '#ff7e67', points: 20 },
-            'cord':     { name: 'Loose Cord',        color: '#f9d423', points: 10 },
-            'unstable': { name: 'Unstable Object',   color: '#82aaff', points: 5  }
+            'outlet':   { name: 'Electrical Outlet' },
+            'sharp':    { name: 'Sharp Corner' },
+            'small':    { name: 'Choking Hazard' },
+            'chemical': { name: 'Chemical/Cleaner' },
+            'cord':     { name: 'Loose Cord' },
+            'unstable': { name: 'Unstable Object' }
         };
 
         // --- Initialization ---
         window.addEventListener('load', () => {
             // Cache DOM elements
             video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
             overlay = document.getElementById('overlay');
             scanBtn = document.getElementById('scanBtn');
             cameraBtn = document.getElementById('cameraBtn');
@@ -462,9 +434,7 @@
             hazardListContainer = document.getElementById('hazardListContainer');
             hazardList = document.getElementById('hazardList');
             roomSecuredBadge = document.getElementById('roomSecuredBadge');
-            safetyScoreElement = document.getElementById('safetyScore');
             appContainer = document.getElementById('appContainer');
-            saveReportBtn = document.getElementById('saveReportBtn');
             checklistBtn = document.getElementById('checklistBtn');
             badgesBtn = document.getElementById('badgesBtn');
             checklistScreen = document.getElementById('checklistScreen');
@@ -480,7 +450,7 @@
             loadState();
             renderBadges();
 
-            if (window.location.protocol !== 'https:') { // Corrected line
+            if (window.location.protocol !== 'https:') {
                 showError('<h3>🔒 Secure Connection Required</h3><p>To use your camera, this page must be loaded over a secure (HTTPS) connection.</p>');
                 if (cameraBtn) cameraBtn.disabled = true;
             } else {
@@ -500,14 +470,6 @@
                 
                 await video.play();
                 
-                await new Promise(resolve => {
-                    video.onloadedmetadata = () => {
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        resolve();
-                    };
-                });
-                
                 cameraErrorElement.style.display = 'none';
                 cameraBtn.style.display = 'none';
                 scanBtn.style.display = 'inline-block';
@@ -524,22 +486,20 @@
             }
         }
 
-        // --- Core Scanning & AI Logic ---
+        // --- Core Scanning Logic (Simulation) ---
         function toggleScanning() {
             isScanning = !isScanning;
             if (isScanning) {
                 scanBtn.textContent = 'Stop Scan';
                 scanBtn.classList.add('active');
-                saveReportBtn.style.display = 'none';
-                showStatus('🔍 Starting AI scan...');
+                showStatus('🔍 Scanning for hazards...');
                 clearAll();
-                scanLoop();
+                scanInterval = setInterval(scanLoop, 2000); // Simulate scan every 2 seconds
             } else {
                 scanBtn.textContent = 'Start Scan';
                 scanBtn.classList.remove('active');
-                if (scanLoopTimeout) clearTimeout(scanLoopTimeout);
+                if (scanInterval) clearInterval(scanInterval);
                 showStatus('Scan paused.');
-                saveReportBtn.style.display = 'inline-block';
                 
                 if (detectedHazards.length === 0) {
                     showRoomSecured();
@@ -547,134 +507,50 @@
             }
         }
 
-        async function scanLoop() {
-            if (!isScanning || isAnalyzing) return;
-
-            try {
-                isAnalyzing = true;
-                scanBtn.disabled = true;
-                showStatus('🧠 Analyzing frame...');
-
-                const hazards = await analyzeFrameWithAI();
-
-                clearOverlays();
-                if (hazards && hazards.length > 0) {
-                    hazards.forEach(h => addHazard(h));
-                    showStatus(`⚠️ Found ${hazards.length} hazard(s)!`);
-                } else {
-                    showStatus('✅ All clear! Scanning...');
-                }
-                updateHazardList();
-                calculateSafetyScore();
-                
-                unlockBadge('firstScan');
-                badgesBtn.style.display = 'inline-block';
-
-            } catch (error) {
-                console.error("AI Analysis Error:", error);
-                showStatus('❌ AI analysis failed. Retrying...');
-            } finally {
-                isAnalyzing = false;
-                scanBtn.disabled = false;
-                if (isScanning) {
-                    scanLoopTimeout = setTimeout(scanLoop, API_SCAN_INTERVAL);
-                }
+        function scanLoop() {
+            if (!isScanning) return;
+            // Randomly decide to add or remove a hazard to keep it dynamic
+            if (Math.random() > 0.6 && detectedHazards.length > 0) {
+                const randomHazard = detectedHazards[Math.floor(Math.random() * detectedHazards.length)];
+                removeHazard(randomHazard.id);
+            } else if (Math.random() > 0.5 && detectedHazards.length < 5) {
+                addSimulatedHazard();
             }
         }
         
-        async function analyzeFrameWithAI() {
-            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const base64ImageData = canvas.toDataURL('image/jpeg', 0.5).split(',')[1];
-            const apiKey = ""; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+        function addSimulatedHazard() {
+            const hazardKeys = Object.keys(HAZARD_TYPES);
+            const randomType = hazardKeys[Math.floor(Math.random() * hazardKeys.length)];
+            const hazardInfo = HAZARD_TYPES[randomType];
 
-            const prompt = `Analyze this image for baby safety hazards. For each hazard, provide its type, a severity level ('high', 'medium', 'low'), and a precise polygon outline. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
-
-            const payload = {
-                contents: [{ parts: [
-                    { text: prompt },
-                    { inlineData: { mimeType: "image/jpeg", data: base64ImageData } }
-                ]}],
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: {
-                                "type": { "type": "STRING", "enum": Object.keys(HAZARD_TYPES) },
-                                "severity": { "type": "STRING", "enum": ["high", "medium", "low"] },
-                                "polygon": {
-                                    "type": "ARRAY",
-                                    "items": {
-                                        "type": "OBJECT",
-                                        "properties": { "x": { "type": "NUMBER" }, "y": { "type": "NUMBER" } },
-                                        "required": ["x", "y"]
-                                    }
-                                }
-                            },
-                            "required": ["type", "severity", "polygon"]
-                        }
-                    }
-                }
-            };
-
-            const response = await fetch(apiUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-
-            if (!response.ok) throw new Error(`API request failed: ${response.status}`);
-            const result = await response.json();
-            
-            if (result.candidates?.[0]?.content?.parts?.[0]) {
-                return JSON.parse(result.candidates[0].content.parts[0].text);
-            }
-            return [];
-        }
-
-        // --- UI and Hazard Management ---
-        function addHazard(hazardData) {
             const hazardId = ++hazardIdCounter;
-            const hazardInfo = HAZARD_TYPES[hazardData.type] || { name: 'Unknown', color: '#ffffff', points: 5 };
             const newHazard = {
                 id: hazardId,
-                type: hazardData.type,
+                type: randomType,
                 name: hazardInfo.name,
-                polygon: hazardData.polygon,
-                severity: hazardData.severity,
-                color: hazardInfo.color,
-                points: hazardInfo.points
+                x: Math.random() * 70 + 10, // % from left
+                y: Math.random() * 60 + 20, // % from top
+                width: Math.random() * 15 + 10, // % width
+                height: Math.random() * 15 + 10, // % height
             };
             detectedHazards.push(newHazard);
             addHazardOverlay(newHazard);
+            updateHazardList();
+            unlockBadge('firstScan');
+            badgesBtn.style.display = 'inline-block';
         }
 
+        // --- UI and Hazard Management ---
         function addHazardOverlay(hazard) {
-            const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-            polygon.id = `hazard-${hazard.id}`;
-            polygon.classList.add('hazard-polygon');
-            
-            const color = HAZARD_TYPES[hazard.type]?.color || '#ffffff';
-            polygon.style.stroke = color;
-            polygon.style.fill = color;
-            polygon.style.color = color;
-            
-            const videoWidth = video.clientWidth;
-            const videoHeight = video.clientHeight;
-
-            const points = hazard.polygon.map(p => 
-                `${p.x * videoWidth},${p.y * videoHeight}`
-            ).join(' ');
-            
-            polygon.setAttribute('points', points);
-            polygon.onclick = () => showHazardAlert(hazard);
-            overlay.appendChild(polygon);
+            const box = document.createElement('div');
+            box.id = `hazard-${hazard.id}`;
+            box.className = 'hazard-box';
+            box.style.left = `${hazard.x}%`;
+            box.style.top = `${hazard.y}%`;
+            box.style.width = `${hazard.width}%`;
+            box.style.height = `${hazard.height}%`;
+            box.onclick = () => showHazardAlert(hazard);
+            overlay.appendChild(box);
         }
         
         function updateHazardList() {
@@ -683,7 +559,6 @@
                 detectedHazards.forEach(h => {
                     const li = document.createElement('li');
                     li.textContent = `🧸 ${h.name}`;
-                    li.style.borderLeft = `4px solid ${HAZARD_TYPES[h.type]?.color || '#fff'}`;
                     hazardList.appendChild(li);
                 });
                 hazardListContainer.classList.add('visible');
@@ -691,21 +566,12 @@
                 hazardListContainer.classList.remove('visible');
             }
         }
-        
-        function calculateSafetyScore() {
-            let score = 100;
-            detectedHazards.forEach(h => {
-                score -= h.points;
-            });
-            safetyScoreElement.textContent = Math.max(0, score);
-        }
 
         function removeHazard(hazardId) {
             const hazardElement = document.getElementById(`hazard-${hazardId}`);
             if (hazardElement) hazardElement.remove();
             detectedHazards = detectedHazards.filter(h => h.id !== hazardId);
             updateHazardList();
-            calculateSafetyScore();
             if (Object.keys(unlockedBadges).length > 0 && !unlockedBadges['clear10']) {
                 const clearedCount = parseInt(localStorage.getItem('nurseryScoutClearedCount') || '0') + 1;
                 localStorage.setItem('nurseryScoutClearedCount', clearedCount);
@@ -724,7 +590,6 @@
             detectedHazards = [];
             hazardIdCounter = 0;
             updateHazardList();
-            calculateSafetyScore();
         }
         
         async function toggleFlash() {
@@ -750,21 +615,6 @@
             roomSecuredBadge.classList.add('visible');
         }
         
-        // --- Report, Checklist, Badges ---
-        async function saveReport() {
-            showStatus('🖼️ Creating report...', 2000);
-            try {
-                const canvas = await html2canvas(document.getElementById('captureArea'), { useCORS: true });
-                const link = document.createElement('a');
-                link.download = 'NurseryScout_Report.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-            } catch (e) {
-                console.error('Failed to create report:', e);
-                showError('<h3>❌ Report Failed</h3><p>Could not generate the report image.</p>');
-            }
-        }
-
         function toggleChecklist(show) {
             checklistScreen.style.display = show ? 'flex' : 'none';
         }
