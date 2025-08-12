@@ -45,6 +45,7 @@
             align-items: center;
             text-align: center;
             padding: 20px;
+            padding-bottom: calc(20px + env(safe-area-inset-bottom)); /* Safe area for bottom nav */
             overflow-y: auto;
         }
         .overlay-content {
@@ -432,7 +433,7 @@
         }
         
         async function analyzeFrameWithAI() {
-            if (!GEMINI_API_KEY || GEMINI_API_KEY === "AIzaSyABT_pd6I3BdfJZioUodnMlvmxtNnRV6FY") {
+            if (!GEMINI_API_KEY || GEMINI_API_KEY === "AIzaSyAENmEG1IWUK2qzZZZRlkTgwLFWb-smthc") {
                 console.error("❌ No Gemini API key set!");
                 showError('<h3>🔑 API Key Missing</h3><p>Please add your Google AI API key to the code to enable scanning.</p>');
                 toggleScanning();
@@ -830,7 +831,3 @@
     </script>
 </body>
 </html>
-
-
-
-
