@@ -502,7 +502,7 @@
         async function initCamera() {
             try {
                 showStatus('📱 Requesting camera permission...');
-                const constraints = { video: { facingMode: 'environment' }, audio: false };
+                const constraints = { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false };
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
                 video.srcObject = stream;
@@ -610,7 +610,7 @@
             
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${GEMINI_API_KEY}`;
 
-            const prompt = `Analyze this image for baby safety hazards. For each hazard found, provide its type, a severity level ('high', 'medium', 'low'), and a precise polygon outline. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
+            const prompt = `You are an expert baby-proofing AI. Analyze this image for safety hazards for a baby or toddler. Prioritize urgent, out-of-place items first (like small objects on the floor, accessible chemicals, loose cords). Then, identify secondary environmental hazards (like uncovered outlets, sharp furniture corners, unstable objects). For each hazard you find, you MUST provide its type, a severity level ('high', 'medium', 'low'), and a precise polygon outlining the object's exact shape. Return ONLY a JSON array of these objects. Focus ONLY on these types: 'outlet', 'sharp', 'small', 'chemical', 'cord', 'unstable'.`;
 
             const payload = {
                 contents: [{ parts: [
@@ -658,6 +658,7 @@
 
         // --- UI and Hazard Management ---
         function addHazard(hazardData) {
+            if (!hazardData.polygon) return; // Do not add hazard if it has no location data
             const hazardId = ++hazardIdCounter;
             const hazardInfo = HAZARD_TYPES[hazardData.type] || { name: 'Unknown', color: '#ffffff', points: 5 };
             const newHazard = {
